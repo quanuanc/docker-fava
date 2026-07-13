@@ -1,40 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_IMAGE=node:24-bookworm-slim
 ARG PYTHON_IMAGE=python:3.13-slim-bookworm
 
-FROM ${NODE_IMAGE} AS frontend-builder
-
-ARG FAVA_TAG
-
-RUN test -n "${FAVA_TAG}" \
-    && apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates git \
-    && rm -rf /var/lib/apt/lists/* \
-    && git clone --depth 1 --branch "${FAVA_TAG}" \
-        https://github.com/beancount/fava.git /src/fava
-
-WORKDIR /src/fava/frontend
-
-RUN npm ci \
-    && npm run build \
-    && rm -rf node_modules
-
-
-FROM ${PYTHON_IMAGE} AS wheel-builder
-
-ARG FAVA_TAG
-
-COPY --from=frontend-builder /src/fava /src/fava
-
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/* \
-    && SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FAVA="${FAVA_TAG#v}" \
-    python -m pip wheel --no-cache-dir --wheel-dir /wheels /src/fava
-
-
-FROM ${PYTHON_IMAGE} AS runtime
+FROM ${PYTHON_IMAGE}
 
 ARG FAVA_TAG
 
@@ -49,11 +17,10 @@ ENV FAVA_HOST=0.0.0.0 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY --from=wheel-builder /wheels /wheels
-
-RUN python -m pip install --no-cache-dir --no-index \
-        --find-links=/wheels /wheels/fava-*.whl \
-    && rm -rf /wheels \
+RUN test -n "${FAVA_TAG}" \
+    && FAVA_VERSION="${FAVA_TAG#v}" \
+    && python -m pip install --no-cache-dir "fava==${FAVA_VERSION}" \
+    && FAVA_VERSION="${FAVA_VERSION}" python -c 'import os; from importlib.metadata import version; from pathlib import Path; import fava; assert version("fava") == os.environ["FAVA_VERSION"]; assert list(Path(fava.__file__).parent.rglob("_layout.html"))' \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin fava
 
 USER fava

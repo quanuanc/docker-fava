@@ -48,12 +48,13 @@ jobs:
 
           upstream="https://github.com/beancount/fava.git"
           tag="${REQUESTED_TAG}"
+          latest_tag="$({
+            git ls-remote --tags --refs --sort='-version:refname' \
+              "${upstream}" 'v*' || exit 1
+          } | awk 'NR == 1 { sub("refs/tags/", "", $2); print $2 }')"
 
           if [[ -z "${tag}" ]]; then
-            tag="$({
-              git ls-remote --tags --refs --sort='-version:refname' \
-                "${upstream}" 'v*' || exit 1
-            } | awk 'NR == 1 { sub("refs/tags/", "", $2); print $2 }')"
+            tag="${latest_tag}"
           fi
 
           if [[ ! "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
@@ -68,8 +69,22 @@ jobs:
           fi
 
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+          is_latest=false
+          if [[ "${tag}" == "${latest_tag}" ]]; then
+            is_latest=true
+          fi
+
+          {
+            echo "tag=${tag}"
+            echo "image=${image}"
+            echo "is_latest=${is_latest}"
+            echo "tags<<EOF"
+            echo "${image}:${tag}"
+            if [[ "${is_latest}" == "true" ]]; then
+              echo "${image}:latest"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
           echo "Selected ${image}:${tag}"
 
       - name: Log in to GitHub Container Registry
@@ -94,16 +109,30 @@ jobs:
           FORCE: ${{ inputs.force }}
           IMAGE: ${{ steps.fava.outputs.image }}
           TAG: ${{ steps.fava.outputs.tag }}
+          IS_LATEST: ${{ steps.fava.outputs.is_latest }}
         run: |
           set -euo pipefail
 
           if [[ "${FORCE}" == "true" ]]; then
             publish=true
-          elif docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
-            echo "${IMAGE}:${TAG} already exists; skipping."
-            publish=false
           else
-            publish=true
+            version_exists=false
+            latest_exists=true
+
+            if docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+              version_exists=true
+            fi
+            if [[ "${IS_LATEST}" == "true" ]] \
+              && ! docker buildx imagetools inspect "${IMAGE}:latest" >/dev/null 2>&1; then
+              latest_exists=false
+            fi
+
+            if [[ "${version_exists}" == "true" && "${latest_exists}" == "true" ]]; then
+              echo "All expected tags already exist; skipping."
+              publish=false
+            else
+              publish=true
+            fi
           fi
 
           echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
@@ -117,7 +146,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             FAVA_TAG=${{ steps.fava.outputs.tag }}
-          tags: ${{ steps.fava.outputs.image }}:${{ steps.fava.outputs.tag }}
+          tags: ${{ steps.fava.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.fava.outputs.tag }}

@@ -4,7 +4,7 @@
 
 ## 自动发布
 
-GitHub Actions 每周一 04:27 UTC 检查一次上游 tag。若对应镜像尚不存在，则从该 tag 的源码编译 Fava 前端和 Python wheel，并将以下平台的统一 manifest 推送到 GitHub Container Registry（GHCR）：
+GitHub Actions 每周一 04:27 UTC 检查一次上游 tag。若对应镜像尚不存在，则从 PyPI 安装与该 tag 对应的 Fava 官方发布包，并将以下平台的统一 manifest 推送到 GitHub Container Registry（GHCR）：
 
 - `linux/amd64`
 - `linux/arm64`
@@ -20,6 +20,14 @@ ghcr.io/<GitHub 用户或组织>/<本仓库名>:<Fava tag>
 ```text
 ghcr.io/<GitHub 用户或组织>/<本仓库名>:v1.30.14
 ```
+
+上游最新版本还会同时发布 `latest`：
+
+```text
+ghcr.io/<GitHub 用户或组织>/<本仓库名>:latest
+```
+
+手动构建历史版本不会覆盖 `latest`。
 
 工作流也支持从 Actions 页面手动运行：`tag` 留空会选择最新 tag；指定 tag 可补建历史版本；启用 `force` 可覆盖重建已有 tag。
 
