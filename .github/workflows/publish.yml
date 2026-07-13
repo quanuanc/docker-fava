@@ -1,6 +1,13 @@
 name: Build and publish Fava image
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/publish.yml
   schedule:
     # Every Monday at 04:27 UTC. Avoid the high-load start of the hour.
     - cron: "27 4 * * 1"
