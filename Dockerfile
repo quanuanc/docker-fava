@@ -27,7 +27,10 @@ ARG FAVA_TAG
 
 COPY --from=frontend-builder /src/fava /src/fava
 
-RUN SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FAVA="${FAVA_TAG#v}" \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FAVA="${FAVA_TAG#v}" \
     python -m pip wheel --no-cache-dir --wheel-dir /wheels /src/fava
 
 
