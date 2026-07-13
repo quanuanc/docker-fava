@@ -1,0 +1,8 @@
+services:
+  fava:
+    image: ghcr.io/OWNER/docker-fava:v1.30.14
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
